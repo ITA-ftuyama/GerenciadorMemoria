@@ -26,7 +26,7 @@
 #define TLBEntriesAmount	15
 
 // Physical Memory RAM
-#define FramesAmount 		128
+#define FramesAmount 		256
 #define FrameBytesSize 		256
 
 /**
@@ -66,6 +66,11 @@ typedef struct statistics {
  * 	Threads
  */
 pthread_t threads[NumThreads];
+pthread_mutex_t mutex;
+typedef struct {
+	int pageNumber, frameNumber;
+}thread_arg, *ptr_thread_arg;
+int pageOnTLB;
 
 /**
  * 	Program Global Variables
@@ -88,6 +93,7 @@ void writeOut(int virtualAddress, int realAddress, int value)
 	fprintf(result, "Virtual address: %d ", virtualAddress);
     fprintf(result, "Physical address: %d ", realAddress);
     fprintf(result, "Value: %d\n", value);
+    _statistics->TranslatedAddressesCounter++;
 }
 
 // Statistics Output Log
@@ -126,8 +132,9 @@ void initialize()
 	for (int i = 0; i < TLBEntriesAmount; i++)
 		_TLB->frameNumber[i] = _TLB->pageNumber[i] = _TLB->LRU[i] = -1;
 		
-	for (int i = 0; i < FramesAmount; i++)
-		_memory->available[i] = 1;
+	for (int i = 0; i < FramesAmount; i++) {
+		_memory->available[i] = 1; _memory->LRU[i] = -1;
+	}
 		
 	_statistics->TranslatedAddressesCounter = 0;
 	_statistics->PageFaultsCounter = 0;
@@ -162,6 +169,26 @@ int findPageOnPageTable(int pageNumber)
 	return -1;
 }
 
+void *thread_findOnPageTable(void *arg) 
+{
+	ptr_thread_arg targ = (ptr_thread_arg)arg;
+	
+	for (int i = 0; i < PagesAmount; i++) 
+		if (_pageTable->pageNumber[i] == targ->pageNumber) 
+		{
+			pthread_mutex_lock(&mutex);
+			if (pageOnTLB == 0) 
+				targ->frameNumber = _pageTable->frameNumber[i];
+			pthread_mutex_unlock(&mutex);
+			return NULL;
+		}
+		else if (pageOnTLB == 1) 
+			return NULL;
+	
+	// Requested Page not found on Page Table.
+	return NULL;
+}
+
 // Setting Used Page on Page Table
 void setPageOnPageTable(int pageNumber, int frameNumber)
 {
@@ -191,6 +218,28 @@ int findPageOnTLB(int pageNumber)
 	
 	// Requested Page not found on TLB.
 	return -1;
+}
+
+void *thread_findOnTLB(void *arg) 
+{
+	ptr_thread_arg targ = (ptr_thread_arg)arg;
+
+	for (int i = 0; i < TLBEntriesAmount; i++)
+		if (_TLB->pageNumber[i] == targ->pageNumber) 
+		{
+			pthread_mutex_lock(&mutex);
+			targ->frameNumber = _TLB->frameNumber[i];
+			pageOnTLB = 1;
+			pthread_mutex_unlock(&mutex);
+			
+			_statistics->TLBHitsCounter++;
+			updateTLBLRUusing(i);
+			return NULL;
+		}
+	
+	// Requested Page not found on TLB.
+	pageOnTLB = 0;
+	return NULL;
 }
 
 // Setting Used Page on TLB
@@ -280,17 +329,70 @@ void debugFrameAddress(int address, int frameNumber, int offset)
 	getchar();
 }
 
-void *thread_findOnPageTable(void *pageNumber) {
-	int *pageNumber = (int*)pageNumber;
-	// Usar mutex para frameNumber
+/**
+ * 	Find Frame Number Assynchronous
+ */
+// Find frameNumber on TLB and PageTable on different threads
+int findFrameNumberAssynchronous(int pageNumber)
+{
+	thread_arg arguments;
+	arguments.pageNumber = pageNumber;
+	arguments.frameNumber = -1;
+	pageOnTLB = 0;
 	
+	pthread_mutex_init(&mutex, NULL);
+	pthread_create(&threads[0], NULL, thread_findOnTLB, &(arguments));
+	pthread_create(&threads[1], NULL, thread_findOnPageTable, &(arguments));
+	pthread_join(threads[0], NULL);
+	pthread_join(threads[1], NULL);
+	
+	int frameNumber = arguments.frameNumber;
+	
+	if (frameNumber == -1)
+	{
+		// Load on memory entire page of BACKING_STORE
+		frameNumber = findFrameOnMemory();
+		getBackingStorePage(pageNumber, frameNumber);
+		
+		// Set up accessed page on Page Table
+		setPageOnPageTable(pageNumber, frameNumber);
+	}
+	if (pageOnTLB == 0)
+		setPageOnTLB(pageNumber, frameNumber);
+		
+	return frameNumber;
 }
 
-void *thread_findOnTLB(void *pageNumber) {
-	int *pageNumber = (int*)pageNumber;
-	// Usar mutex para frameNumber
+/**
+ * 	Find Frame Number Synchronous
+ */
+int findFrameNumberSynchronous(int pageNumber)
+{
+	// Find frameNumber on TLB
+	int frameNumber = findPageOnTLB(pageNumber);
 	
+	// If TLB find fails
+	if (frameNumber == -1)
+	{
+		// Find frameNumber on Page Table
+		frameNumber = findPageOnPageTable(pageNumber);
+		
+		// If Page Fault
+		if (frameNumber == -1)
+		{
+			// Load on memory entire page of BACKING_STORE
+			frameNumber = findFrameOnMemory();
+			getBackingStorePage(pageNumber, frameNumber);
+			
+			// Set up accessed page on Page Table
+			setPageOnPageTable(pageNumber, frameNumber);
+		}
+		// Set up accessed page on TLB
+		setPageOnTLB(pageNumber, frameNumber);
+	}
+	return frameNumber;
 }
+
 /**
  * 	Main Memory Manager
  */
@@ -300,53 +402,22 @@ int main()
     while(fgets(line , MaxStringLength, addresses))
     {
 		// Read new virtual Address
-		_statistics->TranslatedAddressesCounter++;
         int virtualAddress = atoi(line);
-        
-        // Parse read virtual Address
         int pageNumber =  virtualAddress/PagesAmount;
         int offset = virtualAddress & (PagesAmount-1);
         
-        // Find frameNumber on TLB
-        int frameNumber = findPageOnTLB(pageNumber);
+        // Find frameNumber
+        //int frameNumber = findFrameNumberSynchronous(pageNumber);
+        int frameNumber = findFrameNumberAssynchronous(pageNumber);
         
-        // Find frameNumber on TLB and PageTable at same time
-        pthread_create(&threads[0], NULL, thread_findOnTLB, &(pageNumber));
-        pthread_create(&threads[1], NULL, thread_findOnPageTable, &(pageNumber));
-        
-        pthread_join(threads[0], NULL);
-        pthread_join(threads[1], NULL);
-        
-        // If TLB find fails
-        if (frameNumber == -1)
-        {
-			// Find frameNumber on Page Table
-			frameNumber = findPageOnPageTable(pageNumber);
-			
-			// If Page Fault
-			if (frameNumber == -1)
-			{
-				// Load on memory entire page of BACKING_STORE
-				frameNumber = findFrameOnMemory();
-				getBackingStorePage(pageNumber, frameNumber);
-				
-				// Set up accessed page on Page Table
-				setPageOnPageTable(pageNumber, frameNumber);
-			}
-			// Set up accessed page on TLB
-			setPageOnTLB(pageNumber, frameNumber);
-		}
-		// Getting memory's desired value
-		int value = _memory->frame[frameNumber].PageContent[offset];
-		
 		// Parse real Address
+		int value = _memory->frame[frameNumber].PageContent[offset];
 		int realAddress = frameNumber*PagesAmount + offset;
+		writeOut(virtualAddress, realAddress, value);
 		
 		// Debuggind PageAddress and FrameAddress
         //debugPageAddress(virtualAddress, pageNumber, offset);
         //debugFrameAddress(realAddress, frameNumber, offset);
-        
-        writeOut(virtualAddress, realAddress, value);
     }
     finalize();
     return 0;
