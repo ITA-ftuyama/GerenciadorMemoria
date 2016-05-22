@@ -45,7 +45,6 @@ typedef struct page {
 // TLB - Maps Pages on Physical Memory (16 entries)
 typedef struct tlb {
 	int pageNumber[TLBEntriesAmount], frameNumber[TLBEntriesAmount];
-	unsigned int FIFO[TLBEntriesAmount];
 } TLB;
 
 // Physical Memory (65.536 bytes)
@@ -130,7 +129,7 @@ void initialize()
 		_pageTable->frameNumber[i] = _pageTable->pageNumber[i] = -1;
 	
 	for (int i = 0; i < TLBEntriesAmount; i++)
-		_TLB->frameNumber[i] = _TLB->pageNumber[i] = _TLB->FIFO[i] = -1;
+		_TLB->frameNumber[i] = _TLB->pageNumber[i] = -1;
 		
 	for (int i = 0; i < FramesAmount; i++) {
 		_memory->available[i] = 1; _memory->FIFO[i] = -1;
