@@ -4,6 +4,7 @@
  *  Memory Manager Simulator
  * 
  *  Felipe Tuyama de F. Barbosa
+ *	Luiz Angel Rocha Rafael
  */
  
 /**
@@ -28,6 +29,11 @@
 // Physical Memory RAM
 #define FramesAmount 		256
 #define FrameBytesSize 		256
+
+//Files
+#define inputfile_default "addresses.txt"
+#define backingStore_default "BACKING_STORE.bin"
+#define result_default "result.txt"
 
 /**
  * 	Memory Manager Structs
@@ -113,11 +119,11 @@ void statisticsLog()
  * 	Initialization/Finalization methods
  */
 // Initializing the Memory Manager
-void initialize()
+void initialize(char * inputfile)
 {
-	backingStore = fopen("BACKING_STORE.bin", "r");
-	addresses = fopen("addresses.txt", "r");
-    result = fopen("result_FIFO.txt", "w");
+	backingStore = fopen(backingStore_default, "r");
+	addresses = fopen(inputfile, "r");
+    result = fopen(result_default, "w");
     
     _statistics = (Statistics*)malloc(sizeof(Statistics));
 	_pageTable = (PageTable*)malloc(sizeof(PageTable));
@@ -408,9 +414,14 @@ int findFrameNumberSynchronous(int pageNumber)
 /**
  * 	Main Memory Manager
  */
-int main()
+int main(int arc, char** argv)
 {
-	initialize();
+	if(arc == 1) {
+		initialize(inputfile_default);
+	}
+	else {
+		initialize(argv[1]);
+	}
     while(fgets(line , MaxStringLength, addresses))
     {
 		// Read new virtual Address
