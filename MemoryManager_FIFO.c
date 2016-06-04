@@ -51,6 +51,7 @@ typedef struct page {
 // TLB - Maps Pages on Physical Memory (16 entries)
 typedef struct tlb {
 	int pageNumber[TLBEntriesAmount], frameNumber[TLBEntriesAmount];
+	unsigned int FIFO[TLBEntriesAmount];
 } TLB;
 
 // Physical Memory (65.536 bytes)
@@ -135,7 +136,7 @@ void initialize(char * inputfile)
 		_pageTable->frameNumber[i] = _pageTable->pageNumber[i] = -1;
 	
 	for (int i = 0; i < TLBEntriesAmount; i++)
-		_TLB->frameNumber[i] = _TLB->pageNumber[i] = -1;
+		_TLB->frameNumber[i] = _TLB->pageNumber[i] = _TLB->FIFO[i] = -1;
 		
 	for (int i = 0; i < FramesAmount; i++) {
 		_memory->available[i] = 1; _memory->FIFO[i] = -1;
@@ -195,21 +196,11 @@ void *thread_findOnPageTable(void *arg)
 	return NULL;
 }
 
-// Update Page Table FIFO
-void updatePageTableFIFO()
-{
-	for (int i = 0; i < PagesAmount-1; i++) {
-		_pageTable->pageNumber[i] = _pageTable->pageNumber[i+1];
-		_pageTable->frameNumber[i] = _pageTable->frameNumber[i+1];
-	}
-}
-
 // Setting Used Page on Page Table
 void setPageOnPageTable(int pageNumber, int frameNumber)
 {
-	updatePageTableFIFO();
-	_pageTable->pageNumber[PagesAmount-1] = pageNumber;
-	_pageTable->frameNumber[PagesAmount-1] = frameNumber;
+	_pageTable->pageNumber[pageNumber] = pageNumber;
+	_pageTable->frameNumber[pageNumber] = frameNumber;
 }
 
 /**
@@ -217,12 +208,31 @@ void setPageOnPageTable(int pageNumber, int frameNumber)
  */
 
 // Update TLB FIFO
-void updateTLBFIFO()
+int updateTLBFIFO()
 {
-	for (int i = 0; i < TLBEntriesAmount-1; i++) {
-		_TLB->pageNumber[i] = _TLB->pageNumber[i+1];
-		_TLB->frameNumber[i] = _TLB->frameNumber[i+1];
+	int slot = 0;
+
+	if (_TLB->FIFO[0] == -1) {
+
+		for (int i = 0; i < TLBEntriesAmount-1; i++)
+			_TLB->FIFO[i] = _TLB->FIFO[i+1];
+
+		for (int i = 0; i < TLBEntriesAmount; i++) {
+			if (_TLB->pageNumber[i] == -1) {
+				slot = i;
+				break;
+			}
+		}
 	}
+	else {
+		slot = _TLB->FIFO[0];
+
+		for (int i = 0; i < TLBEntriesAmount-1; i++)
+			_TLB->FIFO[i] = _TLB->FIFO[i+1];
+	}
+
+	_TLB->FIFO[TLBEntriesAmount-1] = slot;
+	return slot;
 }
 
 // Finding Requested Page on TLB
@@ -231,13 +241,8 @@ int findPageOnTLB(int pageNumber)
 	for (int i = 0; i < TLBEntriesAmount; i++) {
 		if (_TLB->pageNumber[i] == pageNumber) {
 			_statistics->TLBHitsCounter++;
-			// printf("\nachou: %d, %d, %d, %d\n", pageNumber, _TLB->pageNumber[i], i, TLBEntriesAmount-1);
-			// getchar();
 			return _TLB->frameNumber[i];
 		}
-	
-		// printf("\nnao achou: %d, %d, %d, %d\n", pageNumber, _TLB->pageNumber[i], i, TLBEntriesAmount-1);
-		// getchar();
 	}
 	// Requested Page not found on TLB.
 	return -1;
@@ -268,9 +273,8 @@ void *thread_findOnTLB(void *arg)
 // Setting Used Page on TLB
 void setPageOnTLB(int pageNumber, int frameNumber)
 {
-	int newTLBindex = TLBEntriesAmount-1;
-	
-	updateTLBFIFO();
+	int newTLBindex = updateTLBFIFO();
+
 	_TLB->frameNumber[newTLBindex] = frameNumber;
 	_TLB->pageNumber[newTLBindex] = pageNumber;
 }
@@ -284,13 +288,10 @@ void updateMEMFIFOusing(int index)
 		_memory->FIFO[i] = _memory->FIFO[i+1];
 }
 
-// Find Oldest Frame on memory using FIFO
+// Find Oldest Frame on memory (first element on FIFO)
 int findOldestFrameOnMemory()
 {
 	int newFrameIndex = 0;
-	// for (int i = 0; i < FramesAmount; i++)
-	// 	if (_memory->FIFO[i] < _memory->FIFO[newFrameIndex])
-	// 		newFrameIndex = i;
 	return newFrameIndex;
 }
 
@@ -311,7 +312,7 @@ int findFrameOnMemory()
 	int chosenFrame = findAvailableFrameOnMemory();
 	if (chosenFrame == -1)
 		chosenFrame = findOldestFrameOnMemory();
-	
+	updateMEMFIFOusing(chosenFrame);
 	return chosenFrame;
 }
 
