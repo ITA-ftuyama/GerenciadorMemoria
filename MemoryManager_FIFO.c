@@ -360,10 +360,7 @@ void getBackingStorePage(int pageNumber, int frameNumber)
  // Debug TLB
  void debugTLB()
  {
-	printf("\nTLB:[");
-	for (int i = 0; i < TLBEntriesAmount; i++)
-		printf("%3d ", _TLB->LRU[i]);
-	printf("]\nTLBf[");
+	printf("\nTLBf[");
 	for (int i = 0; i < TLBEntriesAmount; i++)
 		printf("%3d ", _TLB->frameNumber[i]);
 	printf("]\n");
