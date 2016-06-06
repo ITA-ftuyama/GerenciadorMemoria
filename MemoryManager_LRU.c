@@ -40,7 +40,8 @@
  */
 // Page Table (256 pages)
 typedef struct pageTable {
-	int pageNumber[PagesAmount], frameNumber[PagesAmount];
+	int frameNumber[PagesAmount];
+	unsigned int LRU[FramesAmount];
 } PageTable;
 
 // Page (256 bytes)
@@ -57,7 +58,6 @@ typedef struct tlb {
 // Physical Memory (65.536 bytes)
 typedef struct memory {
 	Page frame[FramesAmount];
-	unsigned int LRU[FramesAmount];
 } Memory;
 
 // Statistics
@@ -132,13 +132,13 @@ void initialize(char * inputfile)
 	_TLB = (TLB*)malloc(sizeof(TLB));
 	
 	for (int i = 0; i < PagesAmount; i++) 
-		_pageTable->frameNumber[i] = _pageTable->pageNumber[i] = -1;
+		_pageTable->frameNumber[i] = -1;
 	
 	for (int i = 0; i < TLBEntriesAmount; i++)
 		_TLB->frameNumber[i] = _TLB->pageNumber[i] = _TLB->LRU[i] = -1;
 		
 	for (int i = 0; i < FramesAmount; i++)
-		 _memory->LRU[i] = -1;
+		 _pageTable->LRU[i] = -1;
 		
 	_statistics->TranslatedAddressesCounter = 0;
 	_statistics->PageFaultsCounter = 0;
@@ -165,29 +165,23 @@ void finalize()
 // Finding Requested Page on Page Table
 int findPageOnPageTable(int pageNumber)
 {
-	for (int i = 0; i < PagesAmount; i++) 
-		if (_pageTable->pageNumber[i] == pageNumber)
-			return _pageTable->frameNumber[i];
-	
-	// Requested Page not found on TLB. (Page Fault)
-	return -1;
+	//Return -1 if page is not present (Page Fault)
+	return _pageTable->frameNumber[pageNumber];
 }
 
 void *thread_findOnPageTable(void *arg) 
 {
 	ptr_thread_arg targ = (ptr_thread_arg)arg;
 	
-	for (int i = 0; i < PagesAmount; i++) 
-		if (_pageTable->pageNumber[i] == targ->pageNumber) 
-		{
-			pthread_mutex_lock(&mutex);
-			if (pageOnTLB == 0) 
-				targ->frameNumber = _pageTable->frameNumber[i];
-			pthread_mutex_unlock(&mutex);
-			return NULL;
-		}
-		else if (pageOnTLB == 1) 
-			return NULL;
+	if (_pageTable->frameNumber[targ->pageNumber] != -1)  {
+		pthread_mutex_lock(&mutex);
+		if (pageOnTLB == 0) 
+			targ->frameNumber = _pageTable->frameNumber[targ->pageNumber];
+		pthread_mutex_unlock(&mutex);
+		return NULL;
+	}
+	else if (pageOnTLB == 1) 
+		return NULL;
 	
 	// Requested Page not found on Page Table.
 	return NULL;
@@ -196,7 +190,6 @@ void *thread_findOnPageTable(void *arg)
 // Setting Used Page on Page Table
 void setPageOnPageTable(int pageNumber, int frameNumber)
 {
-	_pageTable->pageNumber[pageNumber] = pageNumber;
 	_pageTable->frameNumber[pageNumber] = frameNumber;
 }
 /**
@@ -217,7 +210,6 @@ int findPageOnTLB(int pageNumber)
 	for (int i = 0; i < TLBEntriesAmount; i++)
 		if (_TLB->pageNumber[i] == pageNumber) {
 			_statistics->TLBHitsCounter++;
-			printf("\nTLB HIT: %3d: p: %d ---- f: %d", _statistics->TLBHitsCounter, _TLB->pageNumber[i], _TLB->frameNumber[i]);
 			updateTLBLRUusing(i);
 			return _TLB->frameNumber[i];
 		}
@@ -274,25 +266,44 @@ void setPageOnTLB(int pageNumber, int frameNumber)
 void updateMEMLRUusing(int index)
 {
 	for (int i = 0; i < FramesAmount; i++)
-		if (_memory->LRU[i] != -1)
-			_memory->LRU[i]++;
-	_memory->LRU[index] = 0;
+		if (_pageTable->LRU[i] != -1)
+			_pageTable->LRU[i]++;
+	_pageTable->LRU[index] = 0;
 }
 
 // Find Oldest Frame on memory using LRU
-int LRUFrameOnMemory()
+int findOldestFrameOnMemory()
 {
 	int newFrameIndex = 0;
 	for (int i = 0; i < FramesAmount; i++)		
-		if (_memory->LRU[i] > _memory->LRU[newFrameIndex])
+		if (_pageTable->LRU[i] > _pageTable->LRU[newFrameIndex])
 			newFrameIndex = i;
+	
+	// Invalidate overwriten page on Page Table
+	for (int i = 0; i < PagesAmount; i++)
+		if (_pageTable->frameNumber[i] == newFrameIndex)
+			_pageTable->frameNumber[i] = -1;
+		
 	return newFrameIndex;
+}
+
+// Find Available Frame on memory
+int findAvailableFrameOnMemory()
+{
+	for (int i = 0; i < FramesAmount; i++)
+		if (_pageTable->LRU[i] == -1) 
+			return i;
+			
+	//There is not available memory
+	return -1;
 }
 
 // Find Frame on memory  
 int findFrameOnMemory()  
 {  
-	int chosenFrame = LRUFrameOnMemory();  
+	int chosenFrame = findAvailableFrameOnMemory();
+	if (chosenFrame == -1)
+		chosenFrame = findOldestFrameOnMemory();  
 	updateMEMLRUusing(chosenFrame);  
 	return chosenFrame;
 }
@@ -315,7 +326,6 @@ void getBackingStorePage(int pageNumber, int frameNumber)
  void debugTLB()
  {
 	printf("\nTLB:[");
-	// Debuggind PageAddress and FrameAddress
 	for (int i = 0; i < TLBEntriesAmount; i++)
 		printf("%3d ", _TLB->LRU[i]);
 	printf("]\nTLBf[");
@@ -422,17 +432,17 @@ int main(int arc, char** argv)
         int offset = virtualAddress & (PagesAmount-1);
         
         // Find frameNumber
-        int frameNumber = findFrameNumberSynchronous(pageNumber);
-        // int frameNumber = findFrameNumberAssynchronous(pageNumber);
+        //int frameNumber = findFrameNumberSynchronous(pageNumber);
+        int frameNumber = findFrameNumberAssynchronous(pageNumber);
         
 		// Parse real Address
 		int value = _memory->frame[frameNumber].PageContent[offset];
 		int realAddress = frameNumber*PagesAmount + offset;
 		writeOut(virtualAddress, realAddress, value);
 		
-		debugTLB();
-        debugPageAddress(virtualAddress, pageNumber, offset);
-        debugFrameAddress(realAddress, frameNumber, offset);
+		//debugTLB();
+        //debugPageAddress(virtualAddress, pageNumber, offset);
+        //debugFrameAddress(realAddress, frameNumber, offset);
     }
     finalize();
     return 0;

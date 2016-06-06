@@ -177,7 +177,6 @@ void *thread_findOnPageTable(void *arg)
 {
 	ptr_thread_arg targ = (ptr_thread_arg)arg;
 	
-	// for (int i = 0; i < PagesAmount; i++) 
 	if (_pageTable->frameNumber[targ->pageNumber] != -1) {
 		pthread_mutex_lock(&mutex);
 		if (pageOnTLB == 0) 
@@ -242,7 +241,6 @@ int findPageOnTLB(int pageNumber)
 	for (int i = 0; i < TLBEntriesAmount; i++) {
 		if (_TLB->pageNumber[i] == pageNumber) {
 			_statistics->TLBHitsCounter++;
-
 			//Requested Page is found on TLB
 			return _TLB->frameNumber[i];
 		}
@@ -359,6 +357,18 @@ void getBackingStorePage(int pageNumber, int frameNumber)
 /**
  * 	Debug application methods
  */
+ // Debug TLB
+ void debugTLB()
+ {
+	printf("\nTLB:[");
+	for (int i = 0; i < TLBEntriesAmount; i++)
+		printf("%3d ", _TLB->LRU[i]);
+	printf("]\nTLBf[");
+	for (int i = 0; i < TLBEntriesAmount; i++)
+		printf("%3d ", _TLB->frameNumber[i]);
+	printf("]\n");
+ }
+ 
 // Debug Page Address
 void debugPageAddress(int address, int pageNumber, int offset)
 {
@@ -457,8 +467,8 @@ int main(int arc, char** argv)
         int offset = virtualAddress & (PagesAmount-1);
         
         // Find frameNumber
-        // int frameNumber = findFrameNumberSynchronous(pageNumber);
-        int frameNumber = findFrameNumberAssynchronous(pageNumber);
+        int frameNumber = findFrameNumberSynchronous(pageNumber);
+        // int frameNumber = findFrameNumberAssynchronous(pageNumber);
         
 		// Parse real Address
 		int value = _memory->frame[frameNumber].PageContent[offset];
