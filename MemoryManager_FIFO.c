@@ -15,6 +15,7 @@
 #include <string.h>
 #include <pthread.h>
 
+
 /**
  * 	Memory Manager Defines
  */
@@ -27,7 +28,7 @@
 #define TLBEntriesAmount	16
 
 // Physical Memory RAM
-#define FramesAmount 		256		//Versao 2: 128 quadros de paginas
+#define FramesAmount 		128		//Versao 2: 128 quadros de paginas
 #define FrameBytesSize 		256
 
 //Files
@@ -41,7 +42,7 @@
 // Page Table (256 pages)
 typedef struct pageTable {
 	int frameNumber[PagesAmount];
-	unsigned int FIFO[PagesAmount];
+	unsigned int FIFO[FramesAmount];
 } PageTable;
 
 // Page (256 bytes)
@@ -133,13 +134,14 @@ void initialize(char * inputfile)
 	_TLB = (TLB*)malloc(sizeof(TLB));
 	
 	for (int i = 0; i < PagesAmount; i++) 
-		_pageTable->frameNumber[i] = _pageTable->FIFO[i] = -1;
+		_pageTable->frameNumber[i] = -1;
 	
 	for (int i = 0; i < TLBEntriesAmount; i++)
 		_TLB->frameNumber[i] = _TLB->pageNumber[i] = _TLB->FIFO[i] = -1;
 		
 	for (int i = 0; i < FramesAmount; i++) {
 		_memory->available[i] = 1;
+		_pageTable->FIFO[i] = -1;
 	}
 		
 	_statistics->TranslatedAddressesCounter = 0;
@@ -286,33 +288,34 @@ void setPageOnTLB(int pageNumber, int frameNumber)
  */
 
 // Find Oldest Frame on memory (first element on FIFO)
-int findOldestFrameOnMemory()
+int findOldestFrameOnMemory(int pageNumber)
 {
 	//The oldest page on the queue
 	int switchedpage = _pageTable->FIFO[0];
 
-	//This frame will be used by a newer page
-	int newFrameIndex = _pageTable->frameNumber[switchedpage];
+	//Sets the switched page as unavailable
+	int slot = _pageTable->frameNumber[switchedpage];
+	_pageTable->frameNumber[switchedpage] = -1;
 
-	return newFrameIndex;
+	//Updates the 
+	for (int i = 0; i < FramesAmount - 1; i++) {
+		_pageTable->FIFO[i] = _pageTable->FIFO[i+1];
+	}
+
+	_pageTable->FIFO[FramesAmount-1] = pageNumber;
+	return slot;
 }
 
 
 //Updates values of Page Table FIFO
 void updatePageTableFIFO(int pageNumber) {
-	//First page of the queue
-	int switchedpage = _pageTable->FIFO[0];
-
-	//Sets the first page of queue as unavailable
-	if(switchedpage != -1)
-		_pageTable->frameNumber[switchedpage] = -1;
 
 	for (int i = 0; i < FramesAmount - 1; i++) {
 		_pageTable->FIFO[i] = _pageTable->FIFO[i+1];
 	}
 
 	//Puts the most recent page as the last of queue
-	_pageTable->FIFO[PagesAmount-1] = pageNumber;
+	_pageTable->FIFO[FramesAmount-1] = pageNumber;
 }
 
 // Find Available Frame on memory
@@ -338,7 +341,7 @@ int findFrameOnMemory(int pageNumber)
 	int chosenFrame = findAvailableFrameOnMemory(pageNumber);
 
 	if (chosenFrame == -1) {
-		chosenFrame = findOldestFrameOnMemory();
+		chosenFrame = findOldestFrameOnMemory(pageNumber);
 	}
 	return chosenFrame;
 }
@@ -458,8 +461,8 @@ int main(int arc, char** argv)
         int offset = virtualAddress & (PagesAmount-1);
         
         // Find frameNumber
-        int frameNumber = findFrameNumberSynchronous(pageNumber);
-        // int frameNumber = findFrameNumberAssynchronous(pageNumber);
+        // int frameNumber = findFrameNumberSynchronous(pageNumber);
+        int frameNumber = findFrameNumberAssynchronous(pageNumber);
         
 		// Parse real Address
 		int value = _memory->frame[frameNumber].PageContent[offset];
