@@ -20,14 +20,14 @@
  */
 // Max Number Definitions
 #define MaxStringLength 	7
-#define NumThreads			2
+#define NumThreads			2		//Versao 2: implementacao de threads
 
 // Virtual Memory Pages
 #define PagesAmount  		256
-#define TLBEntriesAmount	15
+#define TLBEntriesAmount	16
 
 // Physical Memory RAM
-#define FramesAmount 		256
+#define FramesAmount 		256		//Versao 2: 128 quadros de paginas
 #define FrameBytesSize 		256
 
 //Files
@@ -420,8 +420,8 @@ int main(int arc, char** argv)
         int offset = virtualAddress & (PagesAmount-1);
         
         // Find frameNumber
-        //int frameNumber = findFrameNumberSynchronous(pageNumber);
-        int frameNumber = findFrameNumberAssynchronous(pageNumber);
+        int frameNumber = findFrameNumberSynchronous(pageNumber);
+        // int frameNumber = findFrameNumberAssynchronous(pageNumber);
         
 		// Parse real Address
 		int value = _memory->frame[frameNumber].PageContent[offset];
