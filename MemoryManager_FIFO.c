@@ -15,7 +15,6 @@
 #include <string.h>
 #include <pthread.h>
 
-
 /**
  * 	Memory Manager Defines
  */
@@ -28,7 +27,7 @@
 #define TLBEntriesAmount	16
 
 // Physical Memory RAM
-#define FramesAmount 		128		//Versao 2: 128 quadros de paginas
+#define FramesAmount 		256		//Versao 2: 128 quadros de paginas
 #define FrameBytesSize 		256
 
 //Files
@@ -447,12 +446,9 @@ int findFrameNumberSynchronous(int pageNumber)
  */
 int main(int arc, char** argv)
 {
-	if(arc == 1) {
-		initialize(inputfile_default);
-	}
-	else {
-		initialize(argv[1]);
-	}
+	if(arc == 1) 	initialize(inputfile_default);
+	else 			initialize(argv[1]);
+	
     while(fgets(line , MaxStringLength, addresses))
     {
 		// Read new virtual Address

@@ -1,10 +1,10 @@
 all: MemoryManager
     
-MemoryManager.o: MemoryManager.c
-	gcc -std=c99 -Wall -c MemoryManager.c
+MemoryManager.o: MemoryManager_LRU.c
+	gcc -std=c99 -Wall -c MemoryManager_LRU.c
 	
-MemoryManager: MemoryManager.o
-	gcc MemoryManager.o -o MemoryManager -lpthread -lm
+MemoryManager: MemoryManager_LRU.o
+	gcc MemoryManager_LRU.o -o MemoryManager_LRU -lpthread -lm
 	
 clean:
-	rm -rf *o MemoryManager
+	rm -rf *o MemoryManager_LRU
