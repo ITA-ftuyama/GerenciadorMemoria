@@ -178,14 +178,13 @@ void *thread_findOnPageTable(void *arg)
 	ptr_thread_arg targ = (ptr_thread_arg)arg;
 	
 	if (_pageTable->frameNumber[targ->pageNumber] != -1) {
+		// FrameNumber found. Mutex to prevent errors
 		pthread_mutex_lock(&mutex);
 		if (pageOnTLB == 0) 
 			targ->frameNumber = _pageTable->frameNumber[targ->pageNumber];
 		pthread_mutex_unlock(&mutex);
 		return NULL;
 	}
-	else if (pageOnTLB == 1) 
-		return NULL;
 	
 	// Requested Page not found on Page Table.
 	return NULL;
@@ -257,6 +256,7 @@ void *thread_findOnTLB(void *arg)
 	for (int i = 0; i < TLBEntriesAmount; i++)
 		if (_TLB->pageNumber[i] == targ->pageNumber) 
 		{
+			// FrameNumber found. Mutex to prevent errors
 			pthread_mutex_lock(&mutex);
 			targ->frameNumber = _TLB->frameNumber[i];
 			pageOnTLB = 1;
