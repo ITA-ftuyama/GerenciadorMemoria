@@ -297,11 +297,11 @@ void updatePageTableFIFO(int segmentNumber, int pageNumber) {
 // Find Available Frame on memory
 int findAvailableFrameOnMemory(int segmentNumber, int pageNumber)
 {
-	for (int i = 0; i < FramesAmount; i++) {
+	int memIndex = segmentNumber*FramesAmount;
+	for (int i = memIndex; i < memIndex + FramesAmount; i++) {
 		if (_memory->available[i] == 1) {
 			_memory->available[i] = 0;
 			updatePageTableFIFO(segmentNumber, pageNumber);
-
 			//There is available memory
 			return i;
 		}
@@ -331,7 +331,7 @@ int findSegmentationSlotOnMemory(int segmentNumber)
 	else {
 			// Overwrite previous Segmentation allocated on memory
 			//   NOT IMPLEMENTED IN THIS PROJECT
-		
+			printf("DEATH");
 			// Segmentation Fault
 			_statistics->SegmentationFaultsCounter++;
 			_memory->availableSegmentation[segmentationSlot] = segmentNumber;
@@ -359,10 +359,9 @@ int findFrameOnMemory(int segmentNumber, int pageNumber)
 // Manage Backing_Store
 void getBackingStorePage(int segmentNumber, int pageNumber, int frameNumber)
 {
-	int memIndex = frameNumber + segmentNumber*FramesAmount;
 	_statistics->PageFaultsCounter++;
 	fseek(backingStore, pageNumber * FrameBytesSize, SEEK_SET);
-	fread(_memory->frame[memIndex].PageContent, FrameBytesSize, 1, backingStore);
+	fread(_memory->frame[frameNumber].PageContent, FrameBytesSize, 1, backingStore);
 }
 
 /**
@@ -378,20 +377,20 @@ void debugTLB()
 }
 
 // Debug Page Address
-void debugPageAddress(int address, int pageNumber, int offset)
+void debugPageAddress(int address, int segmentNumber, int pageNumber, int offset)
 {
 	printf ("Virtual Address: %5d ", address);
-	// printf ("SegmentNumber : %d ", segmentNumber);
+	printf ("SegmentNumber : %d ", segmentNumber);
 	printf ("PageNumber : %3d ", pageNumber);
 	printf ("PageOffset : %3d", offset);
 	getchar();
 }
 
 // Debug Real Address
-void debugFrameAddress(int address, int frameNumber, int offset)
+void debugFrameAddress(int address, int segmentNumber, int frameNumber, int offset)
 {
 	printf ("  Real  Address: %5d ", address);
-	// printf ("SegmentNumber : %d ", segmentNumber);
+	printf ("SegmentNumber : %d ", segmentNumber);
 	printf ("FrameNumber: %3d ", frameNumber);
 	printf ("FrameOffset: %3d", offset);
 	getchar();
@@ -403,7 +402,6 @@ void debugFrameAddress(int address, int frameNumber, int offset)
 int findFrameNumber(int segmentNumber, int pageNumber)
 {
 	// Find frameNumber on TLB
-	printf("%s\n", "mensagem1");
 	int frameNumber = findPageOnTLB(segmentNumber, pageNumber);
 
 	// If TLB find fails
@@ -425,7 +423,6 @@ int findFrameNumber(int segmentNumber, int pageNumber)
 		// Set up accessed page on TLB
 		setPageOnTLB(segmentNumber, pageNumber, frameNumber);
 	}
-	printf("%s\n", "mensagem2");
 	return frameNumber;
 }
 
@@ -450,15 +447,16 @@ int main(int arc, char** argv)
 
 		// Find frameNumber
 		int frameNumber = findFrameNumber(segmentNumber, pageNumber);
-
+		
 		// Parse real Address
-		int value = _memory->frame[frameNumber].PageContent[offset];
+		int memIndex = frameNumber + segmentNumber*FramesAmount;
+		int value = _memory->frame[memIndex].PageContent[offset];
 		int realAddress = frameNumber * PagesAmount + offset;
-		writeOut(segmentNumber, virtualAddress, realAddress, value);
+	  writeOut(segmentNumber, virtualAddress, realAddress, value);
 
 		// Debuggind PageAddress and FrameAddress
-		// debugPageAddress(virtualAddress, pageNumber, offset);
-		// debugFrameAddress(realAddress, frameNumber, offset);
+		//debugPageAddress(virtualAddress, segmentNumber, pageNumber, offset);
+		//debugFrameAddress(realAddress, segmentNumber, frameNumber, offset);
 	}
 	finalize();
 	return 0;
