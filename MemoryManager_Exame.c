@@ -103,7 +103,7 @@ void writeOut(int segmentNumber, int virtualAddress, int realAddress, int value)
 {
 	fprintf(result, "Virtual address: %d-%d ", segmentNumber, virtualAddress);
 	fprintf(result, "Physical address: %d-%d ", segmentNumber, realAddress);
-	fprintf(result, "Value: %dn", value);
+	fprintf(result, "Value: %d\n", value);
 	_statistics->TranslatedAddressesCounter++;
 }
 
@@ -117,13 +117,13 @@ void statisticsLog()
 	float tlbHitsRate = _statistics->TLBHitsCounter;
 	tlbHitsRate = tlbHitsRate / _statistics->TranslatedAddressesCounter;
 	
-	fprintf(result, "Number of Translated Addresses = %dn", _statistics->TranslatedAddressesCounter);
-	fprintf(result, "Segmentation Faults = %dn", _statistics->SegmentationFaultsCounter);
-	fprintf(result, "Segmentation Fault Rate = %.3fn", segmentationFaultRate);
-	fprintf(result, "Page Faults = %dn", _statistics->PageFaultsCounter);
-	fprintf(result, "Page Fault Rate = %.3fn", pageFaultRate);
-	fprintf(result, "TLB Hits = %dn", _statistics->TLBHitsCounter);
-	fprintf(result, "TLB Hit Rate = %.3fn", tlbHitsRate);
+	fprintf(result, "Number of Translated Addresses = %d\n", _statistics->TranslatedAddressesCounter);
+	fprintf(result, "Segmentation Faults = %d\n", _statistics->SegmentationFaultsCounter);
+	fprintf(result, "Segmentation Fault Rate = %.3f\n", segmentationFaultRate);
+	fprintf(result, "Page Faults = %d\n", _statistics->PageFaultsCounter);
+	fprintf(result, "Page Fault Rate = %.3f\n", pageFaultRate);
+	fprintf(result, "TLB Hits = %d\n", _statistics->TLBHitsCounter);
+	fprintf(result, "TLB Hit Rate = %.3f\n", tlbHitsRate);
 }
 
 /**
