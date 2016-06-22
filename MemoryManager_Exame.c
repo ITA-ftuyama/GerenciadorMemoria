@@ -449,10 +449,10 @@ int main(int arc, char** argv)
 		int frameNumber = findFrameNumber(segmentNumber, pageNumber);
 		
 		// Parse real Address
-		int memIndex = frameNumber + segmentNumber*FramesAmount;
-		int value = _memory->frame[memIndex].PageContent[offset];
-		int realAddress = frameNumber * PagesAmount + offset;
-	  writeOut(segmentNumber, virtualAddress, realAddress, value);
+		int frameIndex = frameNumber - segmentNumber*FramesAmount;
+		int value = _memory->frame[frameNumber].PageContent[offset];
+		int realAddress = frameIndex*PagesAmount + offset;
+	  	writeOut(segmentNumber, virtualAddress, realAddress, value);
 
 		// Debuggind PageAddress and FrameAddress
 		//debugPageAddress(virtualAddress, segmentNumber, pageNumber, offset);
