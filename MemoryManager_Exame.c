@@ -454,7 +454,7 @@ int main(int arc, char** argv)
 		int realAddress = frameIndex*PagesAmount + offset;
 	  	writeOut(segmentNumber, virtualAddress, realAddress, value);
 
-		// Debuggind PageAddress and FrameAddress
+		// Debugging PageAddress and FrameAddress
 		//debugPageAddress(virtualAddress, segmentNumber, pageNumber, offset);
 		//debugFrameAddress(realAddress, segmentNumber, frameNumber, offset);
 	}
